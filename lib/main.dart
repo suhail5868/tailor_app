@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const TailorApp());
@@ -29,6 +31,7 @@ class CustomerPage extends StatefulWidget {
 
 class _CustomerPageState extends State<CustomerPage> {
   String unit = 'انچ';
+  int customerCode = 1;
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
@@ -42,6 +45,125 @@ class _CustomerPageState extends State<CustomerPage> {
     'پاچه',
     'یقه',
   ];
+
+  final Map<String, TextEditingController> amountControllers = {};
+  final Map<String, TextEditingController> modelControllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+
+    for (final measurement in measurements) {
+      amountControllers[measurement] = TextEditingController();
+      modelControllers[measurement] = TextEditingController();
+    }
+
+    loadNextCustomerCode();
+  }
+
+  Future<void> loadNextCustomerCode() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      customerCode = prefs.getInt('next_customer_code') ?? 1;
+    });
+  }
+
+  Future<void> saveCustomer() async {
+    final name = nameController.text.trim();
+    final phone = phoneController.text.trim();
+
+    if (name.isEmpty) {
+      showMessage('لطفاً نام مشتری را وارد کنید.');
+      return;
+    }
+
+    final Map<String, dynamic> customer = {
+      'code': customerCode,
+      'name': name,
+      'phone': phone,
+      'unit': unit,
+      'measurements': {},
+    };
+
+    for (final measurement in measurements) {
+      customer['measurements'][measurement] = {
+        'amount': amountControllers[measurement]!.text.trim(),
+        'model': modelControllers[measurement]!.text.trim(),
+      };
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+
+    final String? oldData = prefs.getString('customers');
+
+    List<dynamic> customers = [];
+
+    if (oldData != null) {
+      customers = jsonDecode(oldData);
+    }
+
+    customers.add(customer);
+
+    await prefs.setString(
+      'customers',
+      jsonEncode(customers),
+    );
+
+    await prefs.setInt(
+      'next_customer_code',
+      customerCode + 1,
+    );
+
+    showMessage('مشتری با موفقیت ذخیره شد.');
+
+    clearForm();
+
+    setState(() {
+      customerCode++;
+    });
+  }
+
+  void clearForm() {
+    nameController.clear();
+    phoneController.clear();
+
+    for (final controller in amountControllers.values) {
+      controller.clear();
+    }
+
+    for (final controller in modelControllers.values) {
+      controller.clear();
+    }
+
+    setState(() {
+      unit = 'انچ';
+    });
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+
+    for (final controller in amountControllers.values) {
+      controller.dispose();
+    }
+
+    for (final controller in modelControllers.values) {
+      controller.dispose();
+    }
+
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,10 +179,10 @@ class _CustomerPageState extends State<CustomerPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'کد مشتری: 1',
+              Text(
+                'کد مشتری: $customerCode',
                 textAlign: TextAlign.right,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -148,6 +270,10 @@ class _CustomerPageState extends State<CustomerPage> {
                 (measurement) => MeasurementRow(
                   title: measurement,
                   unit: unit,
+                  amountController:
+                      amountControllers[measurement]!,
+                  modelController:
+                      modelControllers[measurement]!,
                 ),
               ),
 
@@ -156,13 +282,7 @@ class _CustomerPageState extends State<CustomerPage> {
               SizedBox(
                 height: 55,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('اطلاعات مشتری ثبت شد'),
-                      ),
-                    );
-                  },
+                  onPressed: saveCustomer,
                   icon: const Icon(Icons.save),
                   label: const Text(
                     'ذخیره مشتری',
@@ -181,11 +301,15 @@ class _CustomerPageState extends State<CustomerPage> {
 class MeasurementRow extends StatelessWidget {
   final String title;
   final String unit;
+  final TextEditingController amountController;
+  final TextEditingController modelController;
 
   const MeasurementRow({
     super.key,
     required this.title,
     required this.unit,
+    required this.amountController,
+    required this.modelController,
   });
 
   @override
@@ -195,7 +319,7 @@ class MeasurementRow extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 90,
+            width: 70,
             child: Text(
               title,
               textAlign: TextAlign.right,
@@ -210,6 +334,7 @@ class MeasurementRow extends StatelessWidget {
 
           Expanded(
             child: TextField(
+              controller: amountController,
               textAlign: TextAlign.right,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
@@ -224,6 +349,7 @@ class MeasurementRow extends StatelessWidget {
 
           Expanded(
             child: TextField(
+              controller: modelController,
               textAlign: TextAlign.right,
               decoration: const InputDecoration(
                 hintText: 'مدل لباس',

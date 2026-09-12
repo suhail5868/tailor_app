@@ -27,6 +27,16 @@ class TailorApp extends StatelessWidget {
   }
 }
 
+final List<String> measurementNames = [
+  'قد',
+  'شانه',
+  'آستین',
+  'کمر',
+  'شلوار',
+  'پاچه',
+  'یقه',
+];
+
 class CustomerPage extends StatefulWidget {
   const CustomerPage({super.key});
 
@@ -38,18 +48,8 @@ class _CustomerPageState extends State<CustomerPage> {
   String unit = 'انچ';
   int customerCode = 1;
 
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-
-  final List<String> measurements = [
-    'قد',
-    'شانه',
-    'آستین',
-    'کمر',
-    'شلوار',
-    'پاچه',
-    'یقه',
-  ];
+  final nameController = TextEditingController();
+  final phoneController = TextEditingController();
 
   final Map<String, TextEditingController> amountControllers = {};
   final Map<String, TextEditingController> modelControllers = {};
@@ -58,15 +58,15 @@ class _CustomerPageState extends State<CustomerPage> {
   void initState() {
     super.initState();
 
-    for (final measurement in measurements) {
-      amountControllers[measurement] = TextEditingController();
-      modelControllers[measurement] = TextEditingController();
+    for (final name in measurementNames) {
+      amountControllers[name] = TextEditingController();
+      modelControllers[name] = TextEditingController();
     }
 
-    loadNextCustomerCode();
+    loadNextCode();
   }
 
-  Future<void> loadNextCustomerCode() async {
+  Future<void> loadNextCode() async {
     final prefs = await SharedPreferences.getInstance();
 
     setState(() {
@@ -76,42 +76,49 @@ class _CustomerPageState extends State<CustomerPage> {
 
   Future<void> saveCustomer() async {
     final name = nameController.text.trim();
-    final phone = phoneController.text.trim();
 
     if (name.isEmpty) {
       showMessage('لطفاً نام مشتری را وارد کنید.');
       return;
     }
 
-    final Map<String, dynamic> customer = {
-      'code': customerCode,
-      'name': name,
-      'phone': phone,
-      'unit': unit,
-      'measurements': {},
-    };
+    final Map<String, dynamic> measurements = {};
 
-    for (final measurement in measurements) {
-      customer['measurements'][measurement] = {
-        'amount': amountControllers[measurement]!.text.trim(),
-        'model': modelControllers[measurement]!.text.trim(),
+    for (final item in measurementNames) {
+      measurements[item] = {
+        'amount': amountControllers[item]!.text.trim(),
+        'model': modelControllers[item]!.text.trim(),
       };
     }
 
+    final customer = {
+      'code': customerCode,
+      'name': name,
+      'phone': phoneController.text.trim(),
+      'unit': unit,
+      'measurements': measurements,
+      'clothingRecords': [
+        {
+          'title': 'لباس اول',
+          'unit': unit,
+          'measurements': measurements,
+        }
+      ],
+    };
+
     final prefs = await SharedPreferences.getInstance();
 
-    final String? savedCustomers = prefs.getString('customers');
+    final saved = prefs.getString('customers');
 
     List<dynamic> customers = [];
 
-    if (savedCustomers != null) {
-      customers = jsonDecode(savedCustomers);
+    if (saved != null) {
+      customers = jsonDecode(saved);
     }
 
     customers.add(customer);
 
     await prefs.setString('customers', jsonEncode(customers));
-
     await prefs.setInt('next_customer_code', customerCode + 1);
 
     if (!mounted) return;
@@ -129,9 +136,12 @@ class _CustomerPageState extends State<CustomerPage> {
     nameController.clear();
     phoneController.clear();
 
-    for (final measurement in measurements) {
-      amountControllers[measurement]!.clear();
-      modelControllers[measurement]!.clear();
+    for (final controller in amountControllers.values) {
+      controller.clear();
+    }
+
+    for (final controller in modelControllers.values) {
+      controller.clear();
     }
 
     setState(() {
@@ -139,17 +149,17 @@ class _CustomerPageState extends State<CustomerPage> {
     });
   }
 
-  void showMessage(String message) {
+  void showMessage(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(content: Text(text)),
     );
   }
 
-  void openCustomerList() {
+  void openCustomers() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const CustomerListPage(),
+        builder: (_) => const CustomerListPage(),
       ),
     );
   }
@@ -184,7 +194,7 @@ class _CustomerPageState extends State<CustomerPage> {
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 child: Text(
                   'کد مشتری: $customerCode',
                   style: const TextStyle(
@@ -216,7 +226,7 @@ class _CustomerPageState extends State<CustomerPage> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 15),
 
             const Text(
               'واحد اندازه‌گیری',
@@ -260,35 +270,29 @@ class _CustomerPageState extends State<CustomerPage> {
 
             const SizedBox(height: 8),
 
-            ...measurements.map(
-              (measurement) => MeasurementRow(
-                title: measurement,
+            ...measurementNames.map(
+              (name) => MeasurementRow(
+                title: name,
                 unit: unit,
-                amountController: amountControllers[measurement]!,
-                modelController: modelControllers[measurement]!,
+                amountController: amountControllers[name]!,
+                modelController: modelControllers[name]!,
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 15),
 
             ElevatedButton.icon(
               onPressed: saveCustomer,
               icon: const Icon(Icons.save),
               label: const Text('ذخیره مشتری'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-              ),
             ),
 
             const SizedBox(height: 10),
 
             OutlinedButton.icon(
-              onPressed: openCustomerList,
+              onPressed: openCustomers,
               icon: const Icon(Icons.people),
               label: const Text('لیست مشتریان'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-              ),
             ),
           ],
         ),
@@ -314,20 +318,18 @@ class MeasurementRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 9),
       child: Row(
         children: [
           SizedBox(
-            width: 65,
+            width: 60,
             child: Text(
               title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 7),
 
           Expanded(
             flex: 2,
@@ -344,7 +346,7 @@ class MeasurementRow extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 7),
 
           Expanded(
             flex: 3,
@@ -373,23 +375,22 @@ class _CustomerListPageState extends State<CustomerListPage> {
   List<dynamic> customers = [];
   List<dynamic> filteredCustomers = [];
 
-  final TextEditingController searchController = TextEditingController();
+  final searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
 
     loadCustomers();
-
     searchController.addListener(searchCustomers);
   }
 
   Future<void> loadCustomers() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final String? savedCustomers = prefs.getString('customers');
+    final saved = prefs.getString('customers');
 
-    if (savedCustomers == null) {
+    if (saved == null) {
       setState(() {
         customers = [];
         filteredCustomers = [];
@@ -397,10 +398,10 @@ class _CustomerListPageState extends State<CustomerListPage> {
       return;
     }
 
-    final List<dynamic> data = jsonDecode(savedCustomers);
+    final data = jsonDecode(saved);
 
     setState(() {
-      customers = data.reversed.toList();
+      customers = List<dynamic>.from(data).reversed.toList();
       filteredCustomers = customers;
     });
   }
@@ -422,15 +423,17 @@ class _CustomerListPageState extends State<CustomerListPage> {
     });
   }
 
-  void openCustomerDetails(dynamic customer) {
-    Navigator.push(
+  void openDetails(dynamic customer) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CustomerDetailsPage(
+        builder: (_) => CustomerDetailsPage(
           customer: customer,
         ),
       ),
     );
+
+    loadCustomers();
   }
 
   @override
@@ -463,10 +466,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
           Expanded(
             child: filteredCustomers.isEmpty
                 ? const Center(
-                    child: Text(
-                      'مشتری پیدا نشد.',
-                      style: TextStyle(fontSize: 17),
-                    ),
+                    child: Text('مشتری پیدا نشد.'),
                   )
                 : ListView.builder(
                     itemCount: filteredCustomers.length,
@@ -495,13 +495,8 @@ class _CustomerListPageState extends State<CustomerListPage> {
                                 ? 'شماره تماس ثبت نشده'
                                 : customer['phone'].toString(),
                           ),
-                          trailing: const Icon(
-                            Icons.arrow_back_ios,
-                            size: 18,
-                          ),
-                          onTap: () {
-                            openCustomerDetails(customer);
-                          },
+                          trailing: const Icon(Icons.arrow_back_ios),
+                          onTap: () => openDetails(customer),
                         ),
                       );
                     },
@@ -513,7 +508,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
   }
 }
 
-class CustomerDetailsPage extends StatelessWidget {
+class CustomerDetailsPage extends StatefulWidget {
   final dynamic customer;
 
   const CustomerDetailsPage({
@@ -522,13 +517,456 @@ class CustomerDetailsPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final Map<String, dynamic> measurements =
-        Map<String, dynamic>.from(customer['measurements']);
+  State<CustomerDetailsPage> createState() => _CustomerDetailsPageState();
+}
 
+class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
+  late TextEditingController nameController;
+  late TextEditingController phoneController;
+
+  late String unit;
+
+  final Map<String, TextEditingController> amountControllers = {};
+  final Map<String, TextEditingController> modelControllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+
+    nameController = TextEditingController(
+      text: widget.customer['name'].toString(),
+    );
+
+    phoneController = TextEditingController(
+      text: widget.customer['phone'].toString(),
+    );
+
+    unit = widget.customer['unit'].toString();
+
+    Map<String, dynamic> measurements = {};
+
+    if (widget.customer['measurements'] != null) {
+      measurements = Map<String, dynamic>.from(
+        widget.customer['measurements'],
+      );
+    }
+
+    for (final name in measurementNames) {
+      final data = measurements[name];
+
+      amountControllers[name] = TextEditingController(
+        text: data == null ? '' : data['amount'].toString(),
+      );
+
+      modelControllers[name] = TextEditingController(
+        text: data == null ? '' : data['model'].toString(),
+      );
+    }
+  }
+
+  Future<void> saveChanges() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final saved = prefs.getString('customers');
+
+    if (saved == null) return;
+
+    final List<dynamic> customers = jsonDecode(saved);
+
+    final code = widget.customer['code'];
+
+    final index = customers.indexWhere(
+      (customer) => customer['code'] == code,
+    );
+
+    if (index == -1) return;
+
+    final Map<String, dynamic> measurements = {};
+
+    for (final name in measurementNames) {
+      measurements[name] = {
+        'amount': amountControllers[name]!.text.trim(),
+        'model': modelControllers[name]!.text.trim(),
+      };
+    }
+
+    customers[index]['name'] = nameController.text.trim();
+    customers[index]['phone'] = phoneController.text.trim();
+    customers[index]['unit'] = unit;
+    customers[index]['measurements'] = measurements;
+
+    if (customers[index]['clothingRecords'] == null) {
+      customers[index]['clothingRecords'] = [
+        {
+          'title': 'لباس اول',
+          'unit': unit,
+          'measurements': measurements,
+        }
+      ];
+    } else {
+      final records =
+          List<dynamic>.from(customers[index]['clothingRecords']);
+
+      if (records.isNotEmpty) {
+        records[0] = {
+          'title': records[0]['title'] ?? 'لباس اول',
+          'unit': unit,
+          'measurements': measurements,
+        };
+      }
+
+      customers[index]['clothingRecords'] = records;
+    }
+
+    await prefs.setString('customers', jsonEncode(customers));
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('اطلاعات مشتری ویرایش شد.'),
+      ),
+    );
+  }
+
+  Future<void> deleteCustomer() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('حذف مشتری'),
+          content: Text(
+            'آیا مطمئن هستید مشتری «${widget.customer['name']}» حذف شود؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('خیر'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('بله، حذف شود'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    final prefs = await SharedPreferences.getInstance();
+
+    final saved = prefs.getString('customers');
+
+    if (saved == null) return;
+
+    final List<dynamic> customers = jsonDecode(saved);
+
+    final code = widget.customer['code'];
+
+    customers.removeWhere(
+      (customer) => customer['code'] == code,
+    );
+
+    await prefs.setString(
+      'customers',
+      jsonEncode(customers),
+    );
+
+    if (!mounted) return;
+
+    Navigator.pop(context);
+  }
+
+  Future<void> addClothing() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddClothingPage(
+          customer: widget.customer,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      setState(() {});
+    }
+  }
+
+  void showClothingRecords() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClothingListPage(
+          customer: widget.customer,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+
+    for (final controller in amountControllers.values) {
+      controller.dispose();
+    }
+
+    for (final controller in modelControllers.values) {
+      controller.dispose();
+    }
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('مشخصات مشتری'),
+        title: const Text('ویرایش مشتری'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: deleteCustomer,
+            icon: const Icon(Icons.delete),
+            tooltip: 'حذف مشتری',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'کد مشتری: ${widget.customer['code']}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'نام مشتری',
+                border: OutlineInputBorder(),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'شماره تماس',
+                border: OutlineInputBorder(),
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            const Text(
+              'واحد اندازه‌گیری',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 17,
+              ),
+            ),
+
+            RadioListTile<String>(
+              title: const Text('انچ'),
+              value: 'انچ',
+              groupValue: unit,
+              onChanged: (value) {
+                setState(() {
+                  unit = value!;
+                });
+              },
+            ),
+
+            RadioListTile<String>(
+              title: const Text('سانتی‌متر'),
+              value: 'سانتی‌متر',
+              groupValue: unit,
+              onChanged: (value) {
+                setState(() {
+                  unit = value!;
+                });
+              },
+            ),
+
+            const Text(
+              'اندازه‌ها',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            ...measurementNames.map(
+              (name) => MeasurementRow(
+                title: name,
+                unit: unit,
+                amountController: amountControllers[name]!,
+                modelController: modelControllers[name]!,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            ElevatedButton.icon(
+              onPressed: saveChanges,
+              icon: const Icon(Icons.save),
+              label: const Text('ذخیره تغییرات'),
+            ),
+
+            const SizedBox(height: 10),
+
+            OutlinedButton.icon(
+              onPressed: addClothing,
+              icon: const Icon(Icons.add),
+              label: const Text('ثبت لباس جدید برای این مشتری'),
+            ),
+
+            const SizedBox(height: 10),
+
+            OutlinedButton.icon(
+              onPressed: showClothingRecords,
+              icon: const Icon(Icons.checkroom),
+              label: const Text('مشاهده لباس‌های مشتری'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AddClothingPage extends StatefulWidget {
+  final dynamic customer;
+
+  const AddClothingPage({
+    super.key,
+    required this.customer,
+  });
+
+  @override
+  State<AddClothingPage> createState() => _AddClothingPageState();
+}
+
+class _AddClothingPageState extends State<AddClothingPage> {
+  final titleController = TextEditingController();
+
+  String unit = 'انچ';
+
+  final Map<String, TextEditingController> amountControllers = {};
+  final Map<String, TextEditingController> modelControllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+
+    for (final name in measurementNames) {
+      amountControllers[name] = TextEditingController();
+      modelControllers[name] = TextEditingController();
+    }
+  }
+
+  Future<void> saveClothing() async {
+    final title = titleController.text.trim();
+
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('نام یا مدل لباس را وارد کنید.'),
+        ),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+
+    final saved = prefs.getString('customers');
+
+    if (saved == null) return;
+
+    final List<dynamic> customers = jsonDecode(saved);
+
+    final code = widget.customer['code'];
+
+    final index = customers.indexWhere(
+      (customer) => customer['code'] == code,
+    );
+
+    if (index == -1) return;
+
+    final measurements = <String, dynamic>{};
+
+    for (final name in measurementNames) {
+      measurements[name] = {
+        'amount': amountControllers[name]!.text.trim(),
+        'model': modelControllers[name]!.text.trim(),
+      };
+    }
+
+    if (customers[index]['clothingRecords'] == null) {
+      customers[index]['clothingRecords'] = [];
+    }
+
+    final records =
+        List<dynamic>.from(customers[index]['clothingRecords']);
+
+    records.add({
+      'title': title,
+      'unit': unit,
+      'measurements': measurements,
+    });
+
+    customers[index]['clothingRecords'] = records;
+
+    await prefs.setString(
+      'customers',
+      jsonEncode(customers),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('لباس جدید ثبت شد.'),
+      ),
+    );
+
+    Navigator.pop(context, true);
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+
+    for (final controller in amountControllers.values) {
+      controller.dispose();
+    }
+
+    for (final controller in modelControllers.values) {
+      controller.dispose();
+    }
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('ثبت لباس جدید'),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -536,76 +974,151 @@ class CustomerDetailsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'کد مشتری: ${customer['code']}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'نام: ${customer['name']}',
-                      style: const TextStyle(fontSize: 17),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'شماره تماس: ${customer['phone'].toString().isEmpty ? 'ثبت نشده' : customer['phone']}',
-                      style: const TextStyle(fontSize: 17),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'واحد: ${customer['unit']}',
-                      style: const TextStyle(fontSize: 17),
-                    ),
-                  ],
-                ),
+            Text(
+              'مشتری: ${widget.customer['name']}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: 'نام / مدل لباس',
+                border: OutlineInputBorder(),
               ),
             ),
 
             const SizedBox(height: 15),
 
             const Text(
-              'اندازه‌ها',
+              'واحد اندازه‌گیری',
               style: TextStyle(
-                fontSize: 19,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
               ),
             ),
 
-            const SizedBox(height: 8),
+            RadioListTile<String>(
+              title: const Text('انچ'),
+              value: 'انچ',
+              groupValue: unit,
+              onChanged: (value) {
+                setState(() {
+                  unit = value!;
+                });
+              },
+            ),
 
-            ...measurements.entries.map((entry) {
-              final measurement = entry.key;
-              final data = Map<String, dynamic>.from(entry.value);
+            RadioListTile<String>(
+              title: const Text('سانتی‌متر'),
+              value: 'سانتی‌متر',
+              groupValue: unit,
+              onChanged: (value) {
+                setState(() {
+                  unit = value!;
+                });
+              },
+            ),
 
-              final amount = data['amount'].toString();
-              final model = data['model'].toString();
+            const SizedBox(height: 10),
 
-              return Card(
-                child: ListTile(
-                  title: Text(
-                    measurement,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'مقدار: ${amount.isEmpty ? 'ثبت نشده' : amount} ${customer['unit']}\n'
-                    'مدل لباس: ${model.isEmpty ? 'ثبت نشده' : model}',
-                  ),
-                ),
-              );
-            }),
+            ...measurementNames.map(
+              (name) => MeasurementRow(
+                title: name,
+                unit: unit,
+                amountController: amountControllers[name]!,
+                modelController: modelControllers[name]!,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            ElevatedButton.icon(
+              onPressed: saveClothing,
+              icon: const Icon(Icons.save),
+              label: const Text('ذخیره لباس'),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class ClothingListPage extends StatelessWidget {
+  final dynamic customer;
+
+  const ClothingListPage({
+    super.key,
+    required this.customer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    List<dynamic> records = [];
+
+    if (customer['clothingRecords'] != null) {
+      records = List<dynamic>.from(
+        customer['clothingRecords'],
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('لباس‌های مشتری'),
+        centerTitle: true,
+      ),
+      body: records.isEmpty
+          ? const Center(
+              child: Text('هنوز لباسی ثبت نشده است.'),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: records.length,
+              itemBuilder: (context, index) {
+                final record = records[index];
+
+                return Card(
+                  child: ExpansionTile(
+                    title: Text(
+                      record['title'].toString(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'واحد: ${record['unit']}',
+                    ),
+                    children: [
+                      ...measurementNames.map((name) {
+                        final measurements =
+                            Map<String, dynamic>.from(
+                          record['measurements'],
+                        );
+
+                        final data = measurements[name];
+
+                        if (data == null) {
+                          return const SizedBox();
+                        }
+
+                        return ListTile(
+                          title: Text(name),
+                          subtitle: Text(
+                            'مقدار: ${data['amount'].toString().isEmpty ? 'ثبت نشده' : data['amount']} ${record['unit']}\n'
+                            'مدل لباس: ${data['model'].toString().isEmpty ? 'ثبت نشده' : data['model']}',
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              },
+            ),
     );
   }
 }

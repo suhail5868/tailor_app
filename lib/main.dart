@@ -7,26 +7,6 @@ void main() {
   runApp(const TailorApp());
 }
 
-class TailorApp extends StatelessWidget {
-  const TailorApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'ثبت اندازه مشتریان',
-      theme: ThemeData(
-        useMaterial3: true,
-        fontFamily: 'Arial',
-      ),
-      home: const Directionality(
-        textDirection: TextDirection.rtl,
-        child: CustomerPage(),
-      ),
-    );
-  }
-}
-
 final List<String> measurementNames = [
   'قد',
   'شانه',
@@ -36,6 +16,154 @@ final List<String> measurementNames = [
   'پاچه',
   'یقه',
 ];
+
+class TailorApp extends StatelessWidget {
+  const TailorApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'اپلیکیشن خیاطی',
+      theme: ThemeData(
+        useMaterial3: true,
+        fontFamily: 'Arial',
+      ),
+      home: const Directionality(
+        textDirection: TextDirection.rtl,
+        child: HomePage(),
+      ),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int customerCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    loadCount();
+  }
+
+  Future<void> loadCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('customers');
+
+    int count = 0;
+
+    if (saved != null) {
+      final data = jsonDecode(saved);
+      count = data.length;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      customerCount = count;
+    });
+  }
+
+  Future<void> openNewCustomer() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CustomerPage(),
+      ),
+    );
+
+    loadCount();
+  }
+
+  Future<void> openCustomerList() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CustomerListPage(),
+      ),
+    );
+
+    loadCount();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('مدیریت خیاطی'),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.people,
+                      size: 50,
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'تعداد مشتریان',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '$customerCount',
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: openNewCustomer,
+                icon: const Icon(Icons.person_add),
+                label: const Text('ثبت مشتری جدید'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: openCustomerList,
+                icon: const Icon(Icons.people),
+                label: const Text('لیست مشتریان'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class CustomerPage extends StatefulWidget {
   const CustomerPage({super.key});
@@ -50,6 +178,7 @@ class _CustomerPageState extends State<CustomerPage> {
 
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
+  final noteController = TextEditingController();
 
   final Map<String, TextEditingController> amountControllers = {};
   final Map<String, TextEditingController> modelControllers = {};
@@ -74,6 +203,19 @@ class _CustomerPageState extends State<CustomerPage> {
     });
   }
 
+  Map<String, dynamic> collectMeasurements() {
+    final Map<String, dynamic> result = {};
+
+    for (final name in measurementNames) {
+      result[name] = {
+        'amount': amountControllers[name]!.text.trim(),
+        'model': modelControllers[name]!.text.trim(),
+      };
+    }
+
+    return result;
+  }
+
   Future<void> saveCustomer() async {
     final name = nameController.text.trim();
 
@@ -82,24 +224,20 @@ class _CustomerPageState extends State<CustomerPage> {
       return;
     }
 
-    final Map<String, dynamic> measurements = {};
-
-    for (final item in measurementNames) {
-      measurements[item] = {
-        'amount': amountControllers[item]!.text.trim(),
-        'model': modelControllers[item]!.text.trim(),
-      };
-    }
+    final measurements = collectMeasurements();
 
     final customer = {
       'code': customerCode,
       'name': name,
       'phone': phoneController.text.trim(),
+      'note': noteController.text.trim(),
+      'date': formatDate(DateTime.now()),
       'unit': unit,
       'measurements': measurements,
       'clothingRecords': [
         {
           'title': 'لباس اول',
+          'date': formatDate(DateTime.now()),
           'unit': unit,
           'measurements': measurements,
         }
@@ -107,7 +245,6 @@ class _CustomerPageState extends State<CustomerPage> {
     };
 
     final prefs = await SharedPreferences.getInstance();
-
     final saved = prefs.getString('customers');
 
     List<dynamic> customers = [];
@@ -118,8 +255,15 @@ class _CustomerPageState extends State<CustomerPage> {
 
     customers.add(customer);
 
-    await prefs.setString('customers', jsonEncode(customers));
-    await prefs.setInt('next_customer_code', customerCode + 1);
+    await prefs.setString(
+      'customers',
+      jsonEncode(customers),
+    );
+
+    await prefs.setInt(
+      'next_customer_code',
+      customerCode + 1,
+    );
 
     if (!mounted) return;
 
@@ -135,6 +279,7 @@ class _CustomerPageState extends State<CustomerPage> {
   void clearForm() {
     nameController.clear();
     phoneController.clear();
+    noteController.clear();
 
     for (final controller in amountControllers.values) {
       controller.clear();
@@ -149,18 +294,9 @@ class _CustomerPageState extends State<CustomerPage> {
     });
   }
 
-  void showMessage(String text) {
+  void showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
-    );
-  }
-
-  void openCustomers() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const CustomerListPage(),
-      ),
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -168,6 +304,7 @@ class _CustomerPageState extends State<CustomerPage> {
   void dispose() {
     nameController.dispose();
     phoneController.dispose();
+    noteController.dispose();
 
     for (final controller in amountControllers.values) {
       controller.dispose();
@@ -215,13 +352,24 @@ class _CustomerPageState extends State<CustomerPage> {
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'شماره تماس',
+                border: OutlineInputBorder(),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            TextField(
+              controller: noteController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'یادداشت مشتری',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -286,14 +434,6 @@ class _CustomerPageState extends State<CustomerPage> {
               icon: const Icon(Icons.save),
               label: const Text('ذخیره مشتری'),
             ),
-
-            const SizedBox(height: 10),
-
-            OutlinedButton.icon(
-              onPressed: openCustomers,
-              icon: const Icon(Icons.people),
-              label: const Text('لیست مشتریان'),
-            ),
           ],
         ),
       ),
@@ -325,7 +465,9 @@ class MeasurementRow extends StatelessWidget {
             width: 60,
             child: Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
 
@@ -416,14 +558,17 @@ class _CustomerListPageState extends State<CustomerListPage> {
         filteredCustomers = customers.where((customer) {
           final name = customer['name'].toString().toLowerCase();
           final code = customer['code'].toString();
+          final phone = customer['phone'].toString().toLowerCase();
 
-          return name.contains(query) || code.contains(query);
+          return name.contains(query) ||
+              code.contains(query) ||
+              phone.contains(query);
         }).toList();
       }
     });
   }
 
-  void openDetails(dynamic customer) async {
+  Future<void> openDetails(dynamic customer) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -456,7 +601,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
             child: TextField(
               controller: searchController,
               decoration: const InputDecoration(
-                labelText: 'جستجوی نام یا کد مشتری',
+                labelText: 'جستجوی نام، کد یا شماره تماس',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
@@ -491,11 +636,14 @@ class _CustomerListPageState extends State<CustomerListPage> {
                             ),
                           ),
                           subtitle: Text(
-                            customer['phone'].toString().isEmpty
-                                ? 'شماره تماس ثبت نشده'
-                                : customer['phone'].toString(),
+                            '${customer['phone'].toString().isEmpty ? 'شماره ثبت نشده' : customer['phone']}'
+                            '\nتاریخ: ${customer['date'] ?? 'ثبت نشده'}',
                           ),
-                          trailing: const Icon(Icons.arrow_back_ios),
+                          isThreeLine: true,
+                          trailing: const Icon(
+                            Icons.arrow_back_ios,
+                            size: 18,
+                          ),
                           onTap: () => openDetails(customer),
                         ),
                       );
@@ -517,12 +665,15 @@ class CustomerDetailsPage extends StatefulWidget {
   });
 
   @override
-  State<CustomerDetailsPage> createState() => _CustomerDetailsPageState();
+  State<CustomerDetailsPage> createState() =>
+      _CustomerDetailsPageState();
 }
 
-class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
+class _CustomerDetailsPageState
+    extends State<CustomerDetailsPage> {
   late TextEditingController nameController;
   late TextEditingController phoneController;
+  late TextEditingController noteController;
 
   late String unit;
 
@@ -541,7 +692,11 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
       text: widget.customer['phone'].toString(),
     );
 
-    unit = widget.customer['unit'].toString();
+    noteController = TextEditingController(
+      text: widget.customer['note']?.toString() ?? '',
+    );
+
+    unit = widget.customer['unit']?.toString() ?? 'انچ';
 
     Map<String, dynamic> measurements = {};
 
@@ -564,6 +719,19 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
     }
   }
 
+  Map<String, dynamic> collectMeasurements() {
+    final Map<String, dynamic> result = {};
+
+    for (final name in measurementNames) {
+      result[name] = {
+        'amount': amountControllers[name]!.text.trim(),
+        'model': modelControllers[name]!.text.trim(),
+      };
+    }
+
+    return result;
+  }
+
   Future<void> saveChanges() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -581,50 +749,32 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
 
     if (index == -1) return;
 
-    final Map<String, dynamic> measurements = {};
+    final measurements = collectMeasurements();
 
-    for (final name in measurementNames) {
-      measurements[name] = {
-        'amount': amountControllers[name]!.text.trim(),
-        'model': modelControllers[name]!.text.trim(),
-      };
-    }
+    customers[index]['name'] =
+        nameController.text.trim();
 
-    customers[index]['name'] = nameController.text.trim();
-    customers[index]['phone'] = phoneController.text.trim();
+    customers[index]['phone'] =
+        phoneController.text.trim();
+
+    customers[index]['note'] =
+        noteController.text.trim();
+
     customers[index]['unit'] = unit;
-    customers[index]['measurements'] = measurements;
 
-    if (customers[index]['clothingRecords'] == null) {
-      customers[index]['clothingRecords'] = [
-        {
-          'title': 'لباس اول',
-          'unit': unit,
-          'measurements': measurements,
-        }
-      ];
-    } else {
-      final records =
-          List<dynamic>.from(customers[index]['clothingRecords']);
+    customers[index]['measurements'] =
+        measurements;
 
-      if (records.isNotEmpty) {
-        records[0] = {
-          'title': records[0]['title'] ?? 'لباس اول',
-          'unit': unit,
-          'measurements': measurements,
-        };
-      }
-
-      customers[index]['clothingRecords'] = records;
-    }
-
-    await prefs.setString('customers', jsonEncode(customers));
+    await prefs.setString(
+      'customers',
+      jsonEncode(customers),
+    );
 
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('اطلاعات مشتری ویرایش شد.'),
+        content: Text('اطلاعات ذخیره شد.'),
       ),
     );
   }
@@ -636,15 +786,19 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
         return AlertDialog(
           title: const Text('حذف مشتری'),
           content: Text(
-            'آیا مطمئن هستید مشتری «${widget.customer['name']}» حذف شود؟',
+            'آیا مشتری «${widget.customer['name']}» حذف شود؟',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
               child: const Text('خیر'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
               child: const Text('بله، حذف شود'),
             ),
           ],
@@ -693,7 +847,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
     }
   }
 
-  void showClothingRecords() {
+  void showClothing() {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -708,6 +862,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
   void dispose() {
     nameController.dispose();
     phoneController.dispose();
+    noteController.dispose();
 
     for (final controller in amountControllers.values) {
       controller.dispose();
@@ -730,7 +885,6 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
           IconButton(
             onPressed: deleteCustomer,
             icon: const Icon(Icons.delete),
-            tooltip: 'حذف مشتری',
           ),
         ],
       ),
@@ -745,6 +899,13 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              'تاریخ ثبت: ${widget.customer['date'] ?? 'ثبت نشده'}',
+              style: const TextStyle(fontSize: 16),
             ),
 
             const SizedBox(height: 15),
@@ -764,6 +925,17 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'شماره تماس',
+                border: OutlineInputBorder(),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            TextField(
+              controller: noteController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'یادداشت',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -832,15 +1004,19 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
             OutlinedButton.icon(
               onPressed: addClothing,
               icon: const Icon(Icons.add),
-              label: const Text('ثبت لباس جدید برای این مشتری'),
+              label: const Text(
+                'ثبت لباس جدید برای این مشتری',
+              ),
             ),
 
             const SizedBox(height: 10),
 
             OutlinedButton.icon(
-              onPressed: showClothingRecords,
+              onPressed: showClothing,
               icon: const Icon(Icons.checkroom),
-              label: const Text('مشاهده لباس‌های مشتری'),
+              label: const Text(
+                'مشاهده لباس‌های مشتری',
+              ),
             ),
           ],
         ),
@@ -858,10 +1034,12 @@ class AddClothingPage extends StatefulWidget {
   });
 
   @override
-  State<AddClothingPage> createState() => _AddClothingPageState();
+  State<AddClothingPage> createState() =>
+      _AddClothingPageState();
 }
 
-class _AddClothingPageState extends State<AddClothingPage> {
+class _AddClothingPageState
+    extends State<AddClothingPage> {
   final titleController = TextEditingController();
 
   String unit = 'انچ';
@@ -874,8 +1052,11 @@ class _AddClothingPageState extends State<AddClothingPage> {
     super.initState();
 
     for (final name in measurementNames) {
-      amountControllers[name] = TextEditingController();
-      modelControllers[name] = TextEditingController();
+      amountControllers[name] =
+          TextEditingController();
+
+      modelControllers[name] =
+          TextEditingController();
     }
   }
 
@@ -920,11 +1101,13 @@ class _AddClothingPageState extends State<AddClothingPage> {
       customers[index]['clothingRecords'] = [];
     }
 
-    final records =
-        List<dynamic>.from(customers[index]['clothingRecords']);
+    final records = List<dynamic>.from(
+      customers[index]['clothingRecords'],
+    );
 
     records.add({
       'title': title,
+      'date': formatDate(DateTime.now()),
       'unit': unit,
       'measurements': measurements,
     });
@@ -982,7 +1165,7 @@ class _AddClothingPageState extends State<AddClothingPage> {
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
             TextField(
               controller: titleController,
@@ -993,14 +1176,6 @@ class _AddClothingPageState extends State<AddClothingPage> {
             ),
 
             const SizedBox(height: 15),
-
-            const Text(
-              'واحد اندازه‌گیری',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
 
             RadioListTile<String>(
               title: const Text('انچ'),
@@ -1023,8 +1198,6 @@ class _AddClothingPageState extends State<AddClothingPage> {
                 });
               },
             ),
-
-            const SizedBox(height: 10),
 
             ...measurementNames.map(
               (name) => MeasurementRow(
@@ -1082,6 +1255,11 @@ class ClothingListPage extends StatelessWidget {
               itemBuilder: (context, index) {
                 final record = records[index];
 
+                final measurements =
+                    Map<String, dynamic>.from(
+                  record['measurements'],
+                );
+
                 return Card(
                   child: ExpansionTile(
                     title: Text(
@@ -1091,15 +1269,11 @@ class ClothingListPage extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      'واحد: ${record['unit']}',
+                      'تاریخ: ${record['date'] ?? 'ثبت نشده'}'
+                      '\nواحد: ${record['unit']}',
                     ),
                     children: [
                       ...measurementNames.map((name) {
-                        final measurements =
-                            Map<String, dynamic>.from(
-                          record['measurements'],
-                        );
-
                         final data = measurements[name];
 
                         if (data == null) {
@@ -1109,8 +1283,11 @@ class ClothingListPage extends StatelessWidget {
                         return ListTile(
                           title: Text(name),
                           subtitle: Text(
-                            'مقدار: ${data['amount'].toString().isEmpty ? 'ثبت نشده' : data['amount']} ${record['unit']}\n'
-                            'مدل لباس: ${data['model'].toString().isEmpty ? 'ثبت نشده' : data['model']}',
+                            'مقدار: '
+                            '${data['amount'].toString().isEmpty ? 'ثبت نشده' : data['amount']} '
+                            '${record['unit']}\n'
+                            'مدل لباس: '
+                            '${data['model'].toString().isEmpty ? 'ثبت نشده' : data['model']}',
                           ),
                         );
                       }),
@@ -1121,4 +1298,12 @@ class ClothingListPage extends StatelessWidget {
             ),
     );
   }
+}
+
+String formatDate(DateTime date) {
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+
+  return '$year/$month/$day';
 }

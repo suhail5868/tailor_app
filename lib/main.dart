@@ -1543,13 +1543,13 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> backupData() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final data = prefs.getString('customers') ?? '[]';
-
     final backup = {
       'app': 'tailor_app',
       'version': 1,
-      'date': DateTime.now().toIso8601String(),
-      'customers': jsonDecode(data),
+      'data': prefs.getKeys().fold<Map<String, dynamic>>({}, (map, key) {
+        map[key] = prefs.get(key);
+        return map;
+      }),
     };
 
     final directory =
@@ -1567,9 +1567,11 @@ class _SettingsPageState extends State<SettingsPage> {
       jsonEncode(backup),
     );
 
-    await SharePlus.instance.share(ShareParams(files: 
-      [XFile(file.path)],
-      text: 'پشتیبان اطلاعات اپلیکیشن خیاطی',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: 'پشتیبان اطلاعات اپلیکیشن خیاطی',
+      ),
     );
 
     if (!mounted) return;
@@ -1584,18 +1586,17 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> restoreData() async {
-    final result = await FilePicker.platform.pickFiles(
+    final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
 
-    if (result == null || result.files.single.path == null) {
+    if (files.isEmpty || files.first.path == null) {
       return;
     }
 
     try {
-      final file = File(result.files.single.path!);
-
+      final file = File(files.first.path!);
       final content = await file.readAsString();
 
       final backup = jsonDecode(content);
@@ -1604,138 +1605,48 @@ class _SettingsPageState extends State<SettingsPage> {
         throw Exception('فایل پشتیبان معتبر نیست');
       }
 
-      final customers = backup['customers'];
+      final data = backup['data'];
 
-      final prefs = await SharedPreferences.getInstance();
+      if (data is Map) {
+        final prefs = await SharedPreferences.getInstance();
 
-      await prefs.setString(
-        'customers',
-        jsonEncode(customers),
-      );
+        for (final entry in data.entries) {
+          final key = entry.key.toString();
+          final value = entry.value;
+
+          if (value is String) {
+            await prefs.setString(key, value);
+          } else if (value is int) {
+            await prefs.setInt(key, value);
+          } else if (value is double) {
+            await prefs.setDouble(key, value);
+          } else if (value is bool) {
+            await prefs.setBool(key, value);
+          } else if (value is List) {
+            await prefs.setStringList(
+              key,
+              value.map((e) => e.toString()).toList(),
+            );
+          }
+        }
+      }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'اطلاعات با موفقیت بازیابی شد',
-          ),
+          content: Text('اطلاعات با موفقیت بازیابی شد.'),
         ),
       );
-
-      loadSettings();
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'فایل پشتیبان صحیح نیست',
-          ),
+        SnackBar(
+          content: Text('خطا در بازیابی اطلاعات: $e'),
         ),
       );
     }
-  }
-
-  Future<void> confirmRestore() async {
-    final answer = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('بازیابی اطلاعات'),
-          content: const Text(
-            'اطلاعات فعلی با اطلاعات پشتیبان جایگزین می‌شود. ادامه می‌دهید؟',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(
-                context,
-                false,
-              ),
-              child: const Text('لغو'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(
-                context,
-                true,
-              ),
-              child: const Text('ادامه'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (answer == true) {
-      restoreData();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('تنظیمات'),
-        centerTitle: true,
-      ),
-      body: ListView(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.people),
-            title: const Text('تعداد مشتریان'),
-            trailing: Text(
-              customerCount,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.lock),
-            title: const Text('قفل برنامه'),
-            subtitle: Text(
-              pinEnabled
-                  ? 'قفل فعال است'
-                  : 'قفل غیرفعال است',
-            ),
-            trailing: Switch(
-              value: pinEnabled,
-              onChanged: (value) {
-                if (value) {
-                  setPin();
-                } else {
-                  removePin();
-                }
-              },
-            ),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.backup),
-            title: const Text('پشتیبان‌گیری'),
-            subtitle: const Text(
-              'ذخیره اطلاعات مشتریان',
-            ),
-            onTap: backupData,
-          ),
-          ListTile(
-            leading: const Icon(Icons.restore),
-            title: const Text('بازیابی اطلاعات'),
-            subtitle: const Text(
-              'بازیابی از فایل پشتیبان',
-            ),
-            onTap: confirmRestore,
-          ),
-          const Divider(),
-          const ListTile(
-            leading: Icon(Icons.info),
-            title: Text('نسخه برنامه'),
-            trailing: Text('1.0.0'),
-          ),
-        ],
-      ),
-    );
   }
 }
 

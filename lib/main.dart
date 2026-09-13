@@ -523,7 +523,7 @@ class _CustomerPageState extends State<CustomerPage> {
           ),
           const SizedBox(height: 15),
           DropdownButtonFormField<String>(
-            value: unit,
+            initialValue: unit,
             decoration: const InputDecoration(
               labelText: 'واحد اندازه',
               border: OutlineInputBorder(),
@@ -1076,7 +1076,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            value: unit,
+            initialValue: unit,
             decoration: const InputDecoration(
               labelText: 'واحد اندازه',
               border: OutlineInputBorder(),
@@ -1290,7 +1290,7 @@ class _AddClothingPageState extends State<AddClothingPage> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: unit,
+            initialValue: unit,
             decoration: const InputDecoration(
               labelText: 'واحد اندازه',
               border: OutlineInputBorder(),

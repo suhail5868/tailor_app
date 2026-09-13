@@ -1,0 +1,56 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Create Android
+        run: flutter create . --platforms android
+
+      - name: Set Android compile SDK
+        run: |
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' android/app/build.gradle.kts
+          elif [ -f android/app/build.gradle ]; then
+            sed -i 's/compileSdk flutter.compileSdkVersion/compileSdk 36/' android/app/build.gradle
+          else
+            echo "Android build file not found"
+            exit 1
+          fi
+
+      - name: Remove default test
+        run: rm -f test/widget_test.dart
+
+      - name: Flutter Pub Get
+        run: flutter pub get
+
+      - name: Flutter Analyze
+        run: flutter analyze
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v1.0.${{ github.run_number }}"
+          gh release create "$TAG"             build/app/outputs/flutter-apk/app-release.apk             --title "Tailor App $TAG"             --notes "نسخه جدید اپلیکیشن خیاطی"

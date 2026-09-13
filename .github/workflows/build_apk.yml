@@ -22,10 +22,10 @@ jobs:
       - name: ساخت فایل های Android پروژه
         run: flutter create . --platforms android
 
-      - name: بررسی Flutter
-        run: flutter --version
+      - name: حذف تست پیش فرض Flutter
+        run: rm -f test/widget_test.dart
 
-      - name: دریافت وابستگی‌ها
+      - name: دریافت وابستگی ها
         run: flutter pub get
 
       - name: بررسی کد

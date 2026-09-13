@@ -1567,7 +1567,7 @@ class _SettingsPageState extends State<SettingsPage> {
       jsonEncode(backup),
     );
 
-    await Share.shareXFiles(
+    await SharePlus.instance.share(ShareParams(files: 
       [XFile(file.path)],
       text: 'پشتیبان اطلاعات اپلیکیشن خیاطی',
     );
